@@ -4,64 +4,57 @@ use core::borrow::Borrow;
 use p3_air::{Air, AirBuilder, BaseAir};
 use p3_field::{AbstractField, Field};
 use p3_matrix::Matrix;
-use rand::distributions::{Distribution, Standard};
-use rand::Rng;
+use p3_poseidon2::RC_16_30_U32;
 
-use crate::columns::{num_cols, Poseidon2Cols};
-use crate::{FullRound, PartialRound, SBox};
+use crate::columns::Poseidon2Cols;
+use crate::{num_cols, FullRound, PartialRound, SBox};
 
+pub fn apply_m_4<AF>(x: &mut [AF])
+where
+    AF: AbstractField,
+{
+    let t0 = x[0].clone() + x[1].clone();
+    let t1 = x[2].clone() + x[3].clone();
+    let t2 = x[1].clone() + x[1].clone() + t1.clone();
+    let t3 = x[3].clone() + x[3].clone() + t0.clone();
+    let t4 = t1.clone() + t1.clone() + t1.clone() + t1 + t3.clone();
+    let t5 = t0.clone() + t0.clone() + t0.clone() + t0 + t2.clone();
+    let t6 = t3 + t5.clone();
+    let t7 = t2 + t4.clone();
+    x[0] = t6;
+    x[1] = t5;
+    x[2] = t7;
+    x[3] = t4;
+}
 /// Assumes the field size is at least 16 bits.
 ///
 /// ***WARNING***: this is a stub for now, not ready to use.
 #[derive(Debug)]
-pub struct Poseidon2Air<
-    F: Field,
-    const WIDTH: usize,
-    const SBOX_DEGREE: usize,
-    const SBOX_REGISTERS: usize,
-    const HALF_FULL_ROUNDS: usize,
-    const PARTIAL_ROUNDS: usize,
-> {
-    beginning_full_round_constants: [[F; WIDTH]; HALF_FULL_ROUNDS],
-    partial_round_constants: [F; PARTIAL_ROUNDS],
-    ending_full_round_constants: [[F; WIDTH]; HALF_FULL_ROUNDS],
+pub struct Poseidon2Air<F: Field, const WIDTH: usize> {
+    beginning_full_round_constants: [[F; 16]; 4],
+    partial_round_constants: [F; 22],
+    ending_full_round_constants: [[F; 16]; 4],
 }
 
-impl<
-        F: Field,
-        const WIDTH: usize,
-        const SBOX_DEGREE: usize,
-        const SBOX_REGISTERS: usize,
-        const HALF_FULL_ROUNDS: usize,
-        const PARTIAL_ROUNDS: usize,
-    > Poseidon2Air<F, WIDTH, SBOX_DEGREE, SBOX_REGISTERS, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>
-{
-    pub fn new_from_rng<R: Rng>(rng: &mut R) -> Self
-    where
-        Standard: Distribution<F> + Distribution<[F; WIDTH]>,
-    {
-        let beginning_full_round_constants = rng
-            .sample_iter(Standard)
-            .take(HALF_FULL_ROUNDS)
-            .collect::<Vec<[F; WIDTH]>>()
-            .try_into()
-            .unwrap();
-        let partial_round_constants = rng
-            .sample_iter(Standard)
-            .take(PARTIAL_ROUNDS)
-            .collect::<Vec<F>>()
-            .try_into()
-            .unwrap();
-        let ending_full_round_constants = rng
-            .sample_iter(Standard)
-            .take(HALF_FULL_ROUNDS)
-            .collect::<Vec<[F; WIDTH]>>()
-            .try_into()
-            .unwrap();
+impl<F: Field, const WIDTH: usize> Poseidon2Air<F, WIDTH> {
+    pub fn new() -> Self {
+        let RC_16_30_U32_M31 = RC_16_30_U32
+            .iter()
+            .map(|round| round.map(F::from_wrapped_u32))
+            .collect::<Vec<_>>();
+        // .try_into()
+        // .unwrap();
+        let beginning_full_round_constants: [[F; 16]; 4] =
+            core::array::from_fn(|i| RC_16_30_U32_M31.get(i).unwrap().clone());
+        let ending_full_round_constants: [[F; 16]; 4] =
+            core::array::from_fn(|i| RC_16_30_U32_M31.get(i + 26).unwrap().clone());
+        let partial_round_constants: [F; 22] =
+            core::array::from_fn(|i| RC_16_30_U32_M31.get(i + 4).unwrap().clone()[0]);
+
         Self {
-            beginning_full_round_constants,
-            partial_round_constants,
-            ending_full_round_constants,
+            beginning_full_round_constants: beginning_full_round_constants,
+            partial_round_constants: partial_round_constants,
+            ending_full_round_constants: ending_full_round_constants,
         }
     }
 }
@@ -69,78 +62,186 @@ impl<
 impl<
         F: Field,
         const WIDTH: usize,
-        const SBOX_DEGREE: usize,
-        const SBOX_REGISTERS: usize,
-        const HALF_FULL_ROUNDS: usize,
-        const PARTIAL_ROUNDS: usize,
-    > BaseAir<F>
-    for Poseidon2Air<F, WIDTH, SBOX_DEGREE, SBOX_REGISTERS, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>
+    > BaseAir<F> for Poseidon2Air<F, WIDTH>
 {
     fn width(&self) -> usize {
-        num_cols::<WIDTH, SBOX_DEGREE, SBOX_REGISTERS, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>()
+        num_cols::<WIDTH>()
     }
 }
 
 impl<
         AB: AirBuilder,
         const WIDTH: usize,
-        const SBOX_DEGREE: usize,
-        const SBOX_REGISTERS: usize,
-        const HALF_FULL_ROUNDS: usize,
-        const PARTIAL_ROUNDS: usize,
-    > Air<AB>
-    for Poseidon2Air<AB::F, WIDTH, SBOX_DEGREE, SBOX_REGISTERS, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>
+    > Air<AB> for Poseidon2Air<AB::F, WIDTH>
 {
     #[inline]
     fn eval(&self, builder: &mut AB) {
         let main = builder.main();
         let local = main.row_slice(0);
-        let local: &Poseidon2Cols<
-            AB::Var,
-            WIDTH,
-            SBOX_DEGREE,
-            SBOX_REGISTERS,
-            HALF_FULL_ROUNDS,
-            PARTIAL_ROUNDS,
-        > = (*local).borrow();
+        let local: &Poseidon2Cols<AB::Var, WIDTH> = (*local).borrow();
 
-        let mut state: [AB::Expr; WIDTH] = local.inputs.map(|x| x.into());
+        let rounds_f = 8;
+        let rounds_p = 22;
+        let rounds = rounds_f + rounds_p;
 
-        // assert_eq!(
-        //     L::WIDTH,
-        //     WIDTH,
-        //     "The WIDTH for this STARK does not match the Linear Layer WIDTH."
-        // );
+        // Convert the u32 round constants to field elements.
+        // [[AB::F; WIDTH]; 30]
+        let constants = RC_16_30_U32
+            .iter()
+            .map(|round| round.map(AB::F::from_wrapped_u32))
+            .collect::<Vec<_>>();
 
-        // L::matmul_external(state);
-        for round in 0..HALF_FULL_ROUNDS {
-            eval_full_round(
-                &mut state,
-                &local.beginning_full_rounds[round],
-                &self.beginning_full_round_constants[round],
-                builder,
-            );
+        // Apply the round constants.
+        //
+        // Initial Layer: Don't apply the round constants.
+        // External Layers: Apply the round constants.
+        // Internal Layers: Only apply the round constants to the first element.
+        for i in 0..WIDTH {
+            let mut result: AB::Expr = local.input[i].into();
+            for r in 0..rounds {
+                if i == 0 {
+                    result += local.rounds[r + 1]
+                        * constants[r][i]
+                        * (local.is_external + local.is_internal);
+                } else {
+                    result += local.rounds[r + 1] * constants[r][i] * local.is_external;
+                }
+            }
+            builder.assert_eq(result, local.add_rc[i]);
         }
 
-        for round in 0..PARTIAL_ROUNDS {
-            eval_partial_round(
-                &mut state,
-                &local.partial_rounds[round],
-                &self.partial_round_constants[round],
-                builder,
-            );
+        // Apply the sbox.
+        //
+        // To differentiate between external and internal layers, we use a masking operation
+        // to only apply the state change to the first element for internal layers.
+        for i in 0..WIDTH {
+            let sbox_deg_3 = local.add_rc[i] * local.add_rc[i] * local.add_rc[i];
+            builder.assert_eq(sbox_deg_3, local.sbox_deg_3[i]);
+            let sbox_deg_7 = local.sbox_deg_3[i] * local.sbox_deg_3[i] * local.add_rc[i];
+            builder.assert_eq(sbox_deg_7, local.sbox_deg_7[i]);
+        }
+        let sbox_result: [AB::Expr; WIDTH] = local
+            .sbox_deg_7
+            .iter()
+            .enumerate()
+            .map(|(i, x)| {
+                // The masked first result of the sbox.
+                //
+                // Initial Layer: Pass through the result of the round constant layer.
+                // External Layer: Pass through the result of the sbox layer.
+                // Internal Layer: Pass through the result of the sbox layer.
+                if i == 0 {
+                    local.is_initial * local.add_rc[i] + (AB::Expr::one() - local.is_initial) * *x
+                }
+                // The masked result of the rest of the sbox.
+                //
+                // Initial layer: Pass through the result of the round constant layer.
+                // External layer: Pass through the result of the sbox layer.
+                // Internal layer: Pass through the result of the round constant layer.
+                else {
+                    (local.is_initial + local.is_internal) * local.add_rc[i]
+                        + (AB::Expr::one() - (local.is_initial + local.is_internal)) * *x
+                }
+            })
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        // EXTERNAL LAYER + INITIAL LAYER
+        {
+            // First, we apply M_4 to each consecutive four elements of the state.
+            // In Appendix B's terminology, this replaces each x_i with x_i'.
+            let mut state: [AB::Expr; WIDTH] = sbox_result.clone();
+            for i in (0..WIDTH).step_by(4) {
+                apply_m_4(&mut state[i..i + 4]);
+            }
+
+            // Now, we apply the outer circulant matrix (to compute the y_i values).
+            //
+            // We first precompute the four sums of every four elements.
+            let sums: [AB::Expr; 4] = core::array::from_fn(|k| {
+                (0..WIDTH)
+                    .step_by(4)
+                    .map(|j| state[j + k].clone())
+                    .sum::<AB::Expr>()
+            });
+
+            // The formula for each y_i involves 2x_i' term and x_j' terms for each j that equals i mod 4.
+            // In other words, we can add a single copy of x_i' to the appropriate one of our precomputed sums.
+            for i in 0..WIDTH {
+                state[i] += sums[i % 4].clone();
+                builder
+                    .when(local.is_external + local.is_initial)
+                    .assert_eq(state[i].clone(), local.output[i]);
+            }
         }
 
-        for round in 0..HALF_FULL_ROUNDS {
-            eval_full_round(
-                &mut state,
-                &local.ending_full_rounds[round],
-                &self.ending_full_round_constants[round],
-                builder,
-            );
+        // INTERNAL LAYER
+        {
+            // Use a simple matrix multiplication as the permutation.
+            let mut state: [AB::Expr; WIDTH] = sbox_result.clone();
+            let matmul_constants: [<<AB as AirBuilder>::Expr as AbstractField>::F; WIDTH] =
+                MATRIX_DIAG_16_M31_U32
+                    .iter()
+                    .map(|x| <<AB as AirBuilder>::Expr as AbstractField>::F::from_wrapped_u32(*x))
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap();
+            matmul_internal(&mut state, matmul_constants);
+            for i in 0..WIDTH {
+                builder
+                    .when(local.is_internal)
+                    .assert_eq(state[i].clone(), local.output[i]);
+            }
         }
+
+        // Range check all flags.
+        for i in 0..local.rounds.len() {
+            builder.assert_bool(local.rounds[i]);
+        }
+        builder.assert_bool(local.is_initial);
+        builder.assert_bool(local.is_external);
+        builder.assert_bool(local.is_internal);
+        builder.assert_bool(local.is_initial + local.is_external + local.is_internal);
+
+        // Constrain the initial flag.
+        builder.assert_eq(local.is_initial, local.rounds[0]);
+
+        // Constrain the external flag.
+        let is_external_first_half = (0..4).map(|i| local.rounds[i + 1].into()).sum::<AB::Expr>();
+        let is_external_second_half = (26..30)
+            .map(|i| local.rounds[i + 1].into())
+            .sum::<AB::Expr>();
+        builder.assert_eq(
+            local.is_external,
+            is_external_first_half + is_external_second_half,
+        );
+
+        // Constrain the internal flag.
+        let is_internal = (4..26)
+            .map(|i| local.rounds[i + 1].into())
+            .sum::<AB::Expr>();
+        builder.assert_eq(local.is_internal, is_internal);
+
     }
 }
+
+pub fn matmul_internal<F: Field, AF: AbstractField<F = F>, const WIDTH: usize>(
+    state: &mut [AF; WIDTH],
+    mat_internal_diag_m_1: [F; WIDTH],
+) {
+    let sum: AF = state.iter().cloned().sum();
+    for i in 0..WIDTH {
+        state[i] *= AF::from_f(mat_internal_diag_m_1[i]);
+        state[i] += sum.clone();
+    }
+}
+
+/// TODO: this is taken from baby bear; needs to change it to mersene
+pub const MATRIX_DIAG_16_M31_U32: [u32; 16] = [
+    0x0a632d94, 0x6db657b7, 0x56fbdc9e, 0x052b3d8a, 0x33745201, 0x5c03108c, 0x0beba37b, 0x258c2e8b,
+    0x12029f39, 0x694909ce, 0x6d231724, 0x21c3b222, 0x3c0904a5, 0x01d6acda, 0x27705c83, 0x5231c802,
+];
 
 #[inline]
 fn eval_full_round<
@@ -231,9 +332,12 @@ fn eval_sbox<AB, const DEGREE: usize, const REGISTERS: usize>(
 
     let x2 = x.square();
     let x3 = x2.clone() * x.clone();
+
     load(sbox, 0, x3.clone(), builder);
     if REGISTERS == 1 {
+        // println!("x3: {:?}", x3);
         *x = sbox.0[0].into();
+        // println!("sbox: {:?}", sbox.0[0].into());
         return;
     }
     if DEGREE == 11 {
@@ -255,7 +359,8 @@ fn load<AB, const SBOX_DEGREE: usize, const SBOX_REGISTERS: usize>(
 ) where
     AB: AirBuilder,
 {
-    // builder.assert_eq(sbox.0[i].into(), value);
+    // println!("load sbox i: {:}, value: {:?}", _i, _value);
+    _builder.assert_eq(_sbox.0[_i].into(), _value);
 }
 
 /// Loads the product over all `product` indices the into the `i`-th S-BOX register.
