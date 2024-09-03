@@ -1,3 +1,4 @@
+///! the code is referenced from here: https://github.com/succinctlabs/sp1/pull/397
 use alloc::vec::Vec;
 use core::borrow::Borrow;
 
@@ -59,21 +60,13 @@ impl<F: Field, const WIDTH: usize> Poseidon2Air<F, WIDTH> {
     }
 }
 
-impl<
-        F: Field,
-        const WIDTH: usize,
-    > BaseAir<F> for Poseidon2Air<F, WIDTH>
-{
+impl<F: Field, const WIDTH: usize> BaseAir<F> for Poseidon2Air<F, WIDTH> {
     fn width(&self) -> usize {
         num_cols::<WIDTH>()
     }
 }
 
-impl<
-        AB: AirBuilder,
-        const WIDTH: usize,
-    > Air<AB> for Poseidon2Air<AB::F, WIDTH>
-{
+impl<AB: AirBuilder, const WIDTH: usize> Air<AB> for Poseidon2Air<AB::F, WIDTH> {
     #[inline]
     fn eval(&self, builder: &mut AB) {
         let main = builder.main();
@@ -222,7 +215,6 @@ impl<
             .map(|i| local.rounds[i + 1].into())
             .sum::<AB::Expr>();
         builder.assert_eq(local.is_internal, is_internal);
-
     }
 }
 

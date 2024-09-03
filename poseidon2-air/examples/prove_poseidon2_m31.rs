@@ -5,7 +5,7 @@ use p3_challenger::{DuplexChallenger, HashChallenger, SerializingChallenger32};
 use p3_commit::ExtensionMmcs;
 use p3_dft::Radix2DitParallel;
 use p3_field::extension::BinomialExtensionField;
-use p3_field::Field;
+use p3_field::{AbstractField, Field};
 use p3_fri::{FriConfig, TwoAdicFriPcs};
 use p3_keccak::Keccak256Hash;
 use p3_circle::CirclePcs;
@@ -79,7 +79,7 @@ fn main()  {
         // HALF_FULL_ROUNDS,
         // PARTIAL_ROUNDS,
     > = Poseidon2Air::new();
-    let mut inputs = (0..NUM_HASHES).map(|_| random()).collect::<Vec<_>>();
+    let mut inputs = (0..NUM_HASHES).map(|i| core::array::from_fn(|j| Mersenne31::from_canonical_u32(i as u32))).collect::<Vec<_>>();
     let trace = generate_trace::<
         Val,
         WIDTH,
@@ -106,8 +106,9 @@ fn main()  {
     let config = MyConfig::new(pcs);
 
     let mut challenger = Challenger::from_hasher(vec![], byte_hash);
+    let start = std::time::Instant::now();
     let proof = prove(&config, &air, &mut challenger, trace, &vec![]);
-
+    println!("prove elapsed: {:?}", start.elapsed().as_millis());
     verify(&config, &air, &mut challenger, &proof, &vec![]);
 
 }

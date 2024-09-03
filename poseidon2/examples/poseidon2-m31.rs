@@ -8,7 +8,7 @@ use rand::thread_rng;
 
 
 fn main() {
-        const WIDTH: usize = 16;
+    const WIDTH: usize = 16;
     const D: u64 = 3;
 
     let RC_16_30_U32_M31: [[Mersenne31; WIDTH]; 30] = RC_16_30_U32

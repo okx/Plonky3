@@ -153,7 +153,7 @@ pub fn generate_trace<
             cols.add_rc[0] = cols.input[0] + F::from_wrapped_u32(RC_16_30_U32[r - 1][0]);
         };
 
-        // Apply the sbox.
+        // Apply the sbox. for all layers
         for j in 0..WIDTH {
             cols.sbox_deg_3[j] = cols.add_rc[j] * cols.add_rc[j] * cols.add_rc[j];
             cols.sbox_deg_7[j] = cols.sbox_deg_3[j] * cols.sbox_deg_3[j] * cols.add_rc[j];
