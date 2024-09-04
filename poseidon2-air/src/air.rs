@@ -6,10 +6,11 @@ use core::borrow::Borrow;
 use p3_air::{Air, AirBuilder, BaseAir};
 use p3_field::{AbstractField, Field};
 use p3_matrix::Matrix;
+use p3_mersenne_31::{POSEIDON2_INTERNAL_MATRIX_DIAG_16, POSEIDON2_INTERNAL_MATRIX_DIAG_16_SHIFTS};
 use p3_poseidon2::{apply_mat4, RC_16_30_U32};
 
 use crate::columns::Poseidon2Cols;
-use crate::{num_cols, FullRound, PartialRound, SBox};
+use crate::{biguint_to_u64, num_cols, FullRound, PartialRound, SBox};
 
 /// Assumes the field size is at least 16 bits.
 ///
@@ -158,15 +159,36 @@ impl<AB: AirBuilder, const WIDTH: usize> Air<AB> for Poseidon2Air<AB::F, WIDTH> 
         // INTERNAL LAYER
         {
             // Use a simple matrix multiplication as the permutation.
+            // let mut state: [AB::Expr; WIDTH] = sbox_result.clone();
+            // let matmul_constants: [<<AB as AirBuilder>::Expr as AbstractField>::F; WIDTH] =
+            //     MATRIX_DIAG_16_M31_U32
+            //         .iter()
+            //         .map(|x| <<AB as AirBuilder>::Expr as AbstractField>::F::from_wrapped_u32(*x))
+            //         .collect::<Vec<_>>()
+            //         .try_into()
+            //         .unwrap();
+            // matmul_internal(&mut state, matmul_constants);
             let mut state: [AB::Expr; WIDTH] = sbox_result.clone();
-            let matmul_constants: [<<AB as AirBuilder>::Expr as AbstractField>::F; WIDTH] =
-                MATRIX_DIAG_16_M31_U32
-                    .iter()
-                    .map(|x| <<AB as AirBuilder>::Expr as AbstractField>::F::from_wrapped_u32(*x))
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .unwrap();
-            matmul_internal(&mut state, matmul_constants);
+            let part_sum: AB::Expr = state.clone()
+                .iter()
+                .skip(1)
+                .map(|x| {
+                    x.clone()
+                })
+                .sum();
+            let full_sum = part_sum.clone() + state[0].clone();
+            let s0 = part_sum.clone() + (-state[0].clone());
+            // state[0] = F::from_canonical_u32(biguint_to_u32(from_u62(s0).as_canonical_biguint()));
+            state[0] = s0;
+            for i in 1..16 {
+                let si = full_sum.clone()
+                    + (state[i].clone()
+                        * (AB::F::from_canonical_u32(
+                            1 << POSEIDON2_INTERNAL_MATRIX_DIAG_16_SHIFTS[i-1],
+                        )));
+                state[i] = si;
+            }
+
             for i in 0..WIDTH {
                 builder
                     .when(local.is_internal)
@@ -204,16 +226,6 @@ impl<AB: AirBuilder, const WIDTH: usize> Air<AB> for Poseidon2Air<AB::F, WIDTH> 
     }
 }
 
-pub fn matmul_internal<F: Field, AF: AbstractField<F = F>, const WIDTH: usize>(
-    state: &mut [AF; WIDTH],
-    mat_internal_diag_m_1: [F; WIDTH],
-) {
-    let sum: AF = state.iter().cloned().sum();
-    for i in 0..WIDTH {
-        state[i] *= AF::from_f(mat_internal_diag_m_1[i]);
-        state[i] += sum.clone();
-    }
-}
 
 /// TODO: this is taken from baby bear; needs to change it to mersene
 pub const MATRIX_DIAG_16_M31_U32: [u32; 16] = [

@@ -61,33 +61,18 @@ fn main()  {
 
     type Challenger = SerializingChallenger32<Val, HashChallenger<u8, ByteHash, 32>>;
 
-
-
-    // Poseidon2ExternalMatrixGeneral, DiffusionMatrixMersenne31, 16, 5
-
-
     let external_linear_layer = Poseidon2ExternalMatrixGeneral::default();
     let internal_linear_layer = DiffusionMatrixMersenne31::default();
-
-
-
     let air: Poseidon2Air<
         Val,
         WIDTH,
-        // SBOX_DEGREE,
-        // SBOX_REGISTERS,
-        // HALF_FULL_ROUNDS,
-        // PARTIAL_ROUNDS,
     > = Poseidon2Air::new();
-    let mut inputs = (0..NUM_HASHES).map(|i| core::array::from_fn(|j| Mersenne31::from_canonical_u32(0))).collect::<Vec<_>>();
+    // let mut inputs = (0..NUM_HASHES).map(|i| core::array::from_fn(|j| Mersenne31::from_canonical_u32(0))).collect::<Vec<_>>();
+    let mut input = core::array::from_fn(|j| Mersenne31::from_canonical_u32(0));
     let trace = generate_trace::<
         Val,
         WIDTH,
-        // SBOX_DEGREE,
-        // SBOX_REGISTERS,
-        // HALF_FULL_ROUNDS,
-        // PARTIAL_ROUNDS,
-    >(&mut inputs);
+    >(&mut input);
 
     let fri_config = FriConfig {
         log_blowup: 1,
@@ -106,9 +91,7 @@ fn main()  {
     let config = MyConfig::new(pcs);
 
     let mut challenger = Challenger::from_hasher(vec![], byte_hash);
-    let start = std::time::Instant::now();
     let proof = prove(&config, &air, &mut challenger, trace, &vec![]);
-    println!("prove elapsed: {:?}", start.elapsed().as_millis());
     verify(&config, &air, &mut challenger, &proof, &vec![]);
 
 }
