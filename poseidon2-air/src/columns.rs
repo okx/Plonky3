@@ -17,7 +17,7 @@ pub struct Poseidon2Cols<
     pub rounds: [T; 31],
     pub add_rc: [T; WIDTH],
     pub sbox_deg_3: [T; WIDTH],
-    pub sbox_deg_7: [T; WIDTH],
+    // pub sbox_deg_7: [T; WIDTH],
     pub output: [T; WIDTH],
     pub is_initial: T,
     pub is_internal: T,

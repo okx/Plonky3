@@ -79,7 +79,7 @@ fn main()  {
         // HALF_FULL_ROUNDS,
         // PARTIAL_ROUNDS,
     > = Poseidon2Air::new();
-    let mut inputs = (0..NUM_HASHES).map(|i| core::array::from_fn(|j| Mersenne31::from_canonical_u32(i as u32))).collect::<Vec<_>>();
+    let mut inputs = (0..NUM_HASHES).map(|i| core::array::from_fn(|j| Mersenne31::from_canonical_u32(0))).collect::<Vec<_>>();
     let trace = generate_trace::<
         Val,
         WIDTH,

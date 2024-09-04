@@ -5,12 +5,12 @@ use p3_field::PrimeField;
 use p3_matrix::dense::RowMajorMatrix;
 use p3_maybe_rayon::prelude::*;
 use p3_mersenne_31::Mersenne31;
-use p3_poseidon2::RC_16_30_U32;
+use p3_poseidon2::{apply_mat4, RC_16_30_U32};
 use tracing::instrument;
 
 use crate::air::matmul_internal;
 use crate::columns::Poseidon2Cols;
-use crate::{apply_m_4, num_cols, MATRIX_DIAG_16_M31_U32};
+use crate::{num_cols, MATRIX_DIAG_16_M31_U32};
 
 // // TODO: Take generic iterable
 // #[instrument(name = "generate Poseidon2 trace", skip_all)]
@@ -156,24 +156,26 @@ pub fn generate_trace<
         // Apply the sbox. for all layers
         for j in 0..WIDTH {
             cols.sbox_deg_3[j] = cols.add_rc[j] * cols.add_rc[j] * cols.add_rc[j];
-            cols.sbox_deg_7[j] = cols.sbox_deg_3[j] * cols.sbox_deg_3[j] * cols.add_rc[j];
+            // cols.sbox_deg_7[j] = cols.sbox_deg_3[j] * cols.sbox_deg_3[j] * cols.add_rc[j];
         }
 
         // What state to use for the linear layer.
         let mut state = if is_initial_layer {
             cols.add_rc
         } else if is_external_layer {
-            cols.sbox_deg_7
+            cols.sbox_deg_3
         } else {
             let mut state = cols.add_rc;
-            state[0] = cols.sbox_deg_7[0];
+            state[0] = cols.sbox_deg_3[0];
             state
         };
 
         // Apply either the external or internal linear layer.
         if cols.is_initial == F::one() || cols.is_external == F::one() {
             for j in (0..WIDTH).step_by(4) {
-                apply_m_4(&mut state[j..j + 4]);
+                let mut mat4_state = core::array::from_fn(|k| state[j+k]);
+                apply_mat4(&mut mat4_state);
+                state[j..j + 4].clone_from_slice(&mat4_state);
             }
             let sums: [F; 4] =
                 core::array::from_fn(|k| (0..WIDTH).step_by(4).map(|j| state[j + k]).sum::<F>());

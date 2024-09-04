@@ -1,32 +1,16 @@
 ///! the code is referenced from here: https://github.com/succinctlabs/sp1/pull/397
+/// however, their implementation does not fit to plonky3; lots of parts have been tuned to make it fix plonky3
 use alloc::vec::Vec;
 use core::borrow::Borrow;
 
 use p3_air::{Air, AirBuilder, BaseAir};
 use p3_field::{AbstractField, Field};
 use p3_matrix::Matrix;
-use p3_poseidon2::RC_16_30_U32;
+use p3_poseidon2::{apply_mat4, RC_16_30_U32};
 
 use crate::columns::Poseidon2Cols;
 use crate::{num_cols, FullRound, PartialRound, SBox};
 
-pub fn apply_m_4<AF>(x: &mut [AF])
-where
-    AF: AbstractField,
-{
-    let t0 = x[0].clone() + x[1].clone();
-    let t1 = x[2].clone() + x[3].clone();
-    let t2 = x[1].clone() + x[1].clone() + t1.clone();
-    let t3 = x[3].clone() + x[3].clone() + t0.clone();
-    let t4 = t1.clone() + t1.clone() + t1.clone() + t1 + t3.clone();
-    let t5 = t0.clone() + t0.clone() + t0.clone() + t0 + t2.clone();
-    let t6 = t3 + t5.clone();
-    let t7 = t2 + t4.clone();
-    x[0] = t6;
-    x[1] = t5;
-    x[2] = t7;
-    x[3] = t4;
-}
 /// Assumes the field size is at least 16 bits.
 ///
 /// ***WARNING***: this is a stub for now, not ready to use.
@@ -110,11 +94,11 @@ impl<AB: AirBuilder, const WIDTH: usize> Air<AB> for Poseidon2Air<AB::F, WIDTH> 
         for i in 0..WIDTH {
             let sbox_deg_3 = local.add_rc[i] * local.add_rc[i] * local.add_rc[i];
             builder.assert_eq(sbox_deg_3, local.sbox_deg_3[i]);
-            let sbox_deg_7 = local.sbox_deg_3[i] * local.sbox_deg_3[i] * local.add_rc[i];
-            builder.assert_eq(sbox_deg_7, local.sbox_deg_7[i]);
+            // let sbox_deg_7 = local.sbox_deg_3[i] * local.sbox_deg_3[i] * local.add_rc[i];
+            // builder.assert_eq(sbox_deg_7, local.sbox_deg_7[i]);
         }
         let sbox_result: [AB::Expr; WIDTH] = local
-            .sbox_deg_7
+            .sbox_deg_3
             .iter()
             .enumerate()
             .map(|(i, x)| {
@@ -146,7 +130,9 @@ impl<AB: AirBuilder, const WIDTH: usize> Air<AB> for Poseidon2Air<AB::F, WIDTH> 
             // In Appendix B's terminology, this replaces each x_i with x_i'.
             let mut state: [AB::Expr; WIDTH] = sbox_result.clone();
             for i in (0..WIDTH).step_by(4) {
-                apply_m_4(&mut state[i..i + 4]);
+                let mut mat4_state = core::array::from_fn(|k| state[i + k].clone());
+                apply_mat4(&mut mat4_state);
+                state[i..i + 4].clone_from_slice(&mat4_state);
             }
 
             // Now, we apply the outer circulant matrix (to compute the y_i values).
