@@ -58,6 +58,7 @@ impl<AB: AirBuilder, const WIDTH: usize> Air<AB> for Poseidon2Air<AB::F, WIDTH> 
         let local = main.row_slice(0);
         let local: &Poseidon2Cols<AB::Var, WIDTH> = (*local).borrow();
 
+        //TODO: this is fixed; but it might depends on the WIDTH and degree of S BOX
         let rounds_f = 8;
         let rounds_p = 22;
         let rounds = rounds_f + rounds_p;
