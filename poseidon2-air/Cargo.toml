@@ -10,13 +10,18 @@ p3-field = { path = "../field" }
 p3-matrix = { path = "../matrix" }
 p3-circle = { path = "../circle" }
 p3-maybe-rayon = { path = "../maybe-rayon" }
+p3-challenger={path="../challenger"}
 p3-util = { path = "../util" }
 p3-mersenne-31 = { path = "../mersenne-31" }
+p3-goldilocks = { path = "../goldilocks" }
 #rand = { version = "0.8.5", features = ["min_const_gen"] }
 rand = "0.8.5"
 tracing = "0.1.37"
 p3-poseidon2 = { path = "../poseidon2" }
 num-bigint = { version = "0.4.3", default-features = false }
+serde_json = "1.0.114"
+zkhash = { git = "https://github.com/HorizenLabs/poseidon2" }
+ark-ff = "0.4.2"
 
 [dev-dependencies]
 p3-koala-bear = { path = "../koala-bear" }

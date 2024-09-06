@@ -7,7 +7,7 @@ use p3_air::{Air, AirBuilder, BaseAir};
 use p3_field::{AbstractField, Field};
 use p3_matrix::Matrix;
 use p3_mersenne_31::{POSEIDON2_INTERNAL_MATRIX_DIAG_16, POSEIDON2_INTERNAL_MATRIX_DIAG_16_SHIFTS};
-use p3_poseidon2::{apply_mat4, RC_16_30_U32};
+use p3_poseidon2::{apply_mat4, M31_RC_16_30_U32};
 
 use crate::columns::Poseidon2Cols;
 use crate::{biguint_to_u64, num_cols, FullRound, PartialRound, SBox};
@@ -24,7 +24,7 @@ pub struct Poseidon2Air<F: Field, const WIDTH: usize> {
 
 impl<F: Field, const WIDTH: usize> Poseidon2Air<F, WIDTH> {
     pub fn new() -> Self {
-        let RC_16_30_U32_M31 = RC_16_30_U32
+        let RC_16_30_U32_M31 = M31_RC_16_30_U32
             .iter()
             .map(|round| round.map(F::from_wrapped_u32))
             .collect::<Vec<_>>();
@@ -65,7 +65,7 @@ impl<AB: AirBuilder, const WIDTH: usize> Air<AB> for Poseidon2Air<AB::F, WIDTH> 
 
         // Convert the u32 round constants to field elements.
         // [[AB::F; WIDTH]; 30]
-        let constants = RC_16_30_U32
+        let constants = M31_RC_16_30_U32
             .iter()
             .map(|round| round.map(AB::F::from_wrapped_u32))
             .collect::<Vec<_>>();

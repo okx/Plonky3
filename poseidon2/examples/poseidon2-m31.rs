@@ -1,7 +1,7 @@
 use p3_mersenne_31::{DiffusionMatrixMersenne31, Mersenne31};
 use p3_field::{AbstractField, PrimeField, PrimeField64};
 use p3_poseidon2::{
-    DiffusionPermutation, MdsLightPermutation, Poseidon2, Poseidon2ExternalMatrixGeneral, RC_16_30_U32,
+    DiffusionPermutation, MdsLightPermutation, Poseidon2, Poseidon2ExternalMatrixGeneral, M31_RC_16_30_U32,
 };
 use p3_symmetric::Permutation;
 use rand::thread_rng;
@@ -11,7 +11,7 @@ fn main() {
     const WIDTH: usize = 16;
     const D: u64 = 3;
 
-    let RC_16_30_U32_M31: [[Mersenne31; WIDTH]; 30] = RC_16_30_U32
+    let RC_16_30_U32_M31: [[Mersenne31; WIDTH]; 30] = M31_RC_16_30_U32
     .iter()
     .map(|round| round.map(Mersenne31::from_wrapped_u32))
     .collect::<Vec<_>>()

@@ -1,15 +1,15 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use p3_field::{PrimeField};
+use num_bigint::BigUint;
+use p3_field::PrimeField;
 use p3_matrix::dense::RowMajorMatrix;
 use p3_maybe_rayon::prelude::*;
 use p3_mersenne_31::{from_u62, Mersenne31, POSEIDON2_INTERNAL_MATRIX_DIAG_16_SHIFTS};
-use p3_poseidon2::{apply_mat4, RC_16_30_U32};
-use num_bigint::BigUint;
+use p3_poseidon2::{apply_mat4, M31_RC_16_30_U32};
 
 use crate::columns::Poseidon2Cols;
-use crate::{num_cols};
+use crate::num_cols;
 
 // // TODO: Take generic iterable
 // #[instrument(name = "generate Poseidon2 trace", skip_all)]
@@ -79,7 +79,6 @@ use crate::{num_cols};
 pub const NUM_POSEIDON2_COLS: usize = size_of::<Poseidon2Cols<Mersenne31, 16>>();
 
 pub fn biguint_to_u64(input: BigUint) -> u64 {
-  
     let digits = input.to_bytes_le();
     let mut byts = [0; 8];
     digits.iter().enumerate().for_each(|(j, x)| byts[j] = *x);
@@ -95,22 +94,15 @@ pub fn biguint_to_u32(input: BigUint) -> u32 {
     x_u32
 }
 
-pub fn generate_trace<
-    F: PrimeField,
-    const WIDTH: usize,
->(
+pub fn generate_trace<F: PrimeField, const WIDTH: usize>(
     input: &mut [F; WIDTH],
+    round_constants: Vec<[F; WIDTH]>,
 ) -> RowMajorMatrix<F> {
     let n_rows = 32;
 
     let ncols = num_cols::<WIDTH>();
     let mut trace = RowMajorMatrix::new(vec![F::zero(); n_rows * ncols], ncols);
-    let (prefix, rows, suffix) = unsafe {
-        trace.values.align_to_mut::<Poseidon2Cols<
-            F,
-            WIDTH,
-        >>()
-    };
+    let (prefix, rows, suffix) = unsafe { trace.values.align_to_mut::<Poseidon2Cols<F, WIDTH>>() };
     assert!(prefix.is_empty(), "Alignment should match");
     assert!(suffix.is_empty(), "Alignment should match");
     assert_eq!(rows.len(), n_rows);
@@ -147,7 +139,7 @@ pub fn generate_trace<
 
                 // Apply the round constants.
                 for j in 0..WIDTH {
-                    cols.add_rc[j] = cols.input[j] + F::from_wrapped_u32(RC_16_30_U32[r - 1][j]);
+                    cols.add_rc[j] = cols.input[j] + round_constants[r - 1][j];
                 }
             } else {
                 // Mark the selector as internal.
@@ -155,7 +147,7 @@ pub fn generate_trace<
 
                 // Apply the round constants only on the first element.
                 cols.add_rc.copy_from_slice(&cols.input);
-                cols.add_rc[0] = cols.input[0] + F::from_wrapped_u32(RC_16_30_U32[r - 1][0]);
+                cols.add_rc[0] = cols.input[0] + round_constants[r - 1][0];
             };
 
             // Apply the sbox. for all layers
@@ -204,8 +196,8 @@ pub fn generate_trace<
                     F::from_canonical_u32(biguint_to_u32(from_u62(s0).as_canonical_biguint()));
                 for i in 1..16 {
                     let si = full_sum
-                        + (( biguint_to_u64(state[i].as_canonical_biguint()) )
-                            << POSEIDON2_INTERNAL_MATRIX_DIAG_16_SHIFTS[i - 1]);
+                        + ((biguint_to_u64(state[i].as_canonical_biguint()))
+                            << POSEIDON2_INTERNAL_MATRIX_DIAG_16_SHIFTS[i - 1]); // TODO: this constant here should be different for GL64
                     state[i] =
                         F::from_canonical_u32(biguint_to_u32(from_u62(si).as_canonical_biguint()));
                 }
