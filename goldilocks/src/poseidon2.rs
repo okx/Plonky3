@@ -86,7 +86,7 @@ pub const MATRIX_DIAG_20_GOLDILOCKS_U64: [u64; 20] = [
 const MATRIX_DIAG_8_GOLDILOCKS: [Goldilocks; 8] = to_goldilocks_array(MATRIX_DIAG_8_GOLDILOCKS_U64);
 const MATRIX_DIAG_12_GOLDILOCKS: [Goldilocks; 12] =
     to_goldilocks_array(MATRIX_DIAG_12_GOLDILOCKS_U64);
-const MATRIX_DIAG_16_GOLDILOCKS: [Goldilocks; 16] =
+pub const MATRIX_DIAG_16_GOLDILOCKS: [Goldilocks; 16] =
     to_goldilocks_array(MATRIX_DIAG_16_GOLDILOCKS_U64);
 const MATRIX_DIAG_20_GOLDILOCKS: [Goldilocks; 20] =
     to_goldilocks_array(MATRIX_DIAG_20_GOLDILOCKS_U64);

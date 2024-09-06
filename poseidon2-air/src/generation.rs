@@ -3,6 +3,8 @@ use alloc::vec::Vec;
 
 use num_bigint::BigUint;
 use p3_field::PrimeField;
+use p3_field::{AbstractField, Field, PrimeField64};
+use p3_goldilocks::{Goldilocks, MATRIX_DIAG_16_GOLDILOCKS};
 use p3_matrix::dense::RowMajorMatrix;
 use p3_maybe_rayon::prelude::*;
 use p3_mersenne_31::{from_u62, Mersenne31, POSEIDON2_INTERNAL_MATRIX_DIAG_16_SHIFTS};
@@ -94,9 +96,15 @@ pub fn biguint_to_u32(input: BigUint) -> u32 {
     x_u32
 }
 
+pub enum FieldType {
+    M31,
+    GL64,
+}
+
 pub fn generate_trace<F: PrimeField, const WIDTH: usize>(
     input: &mut [F; WIDTH],
     round_constants: Vec<[F; WIDTH]>,
+    field_type: FieldType,
 ) -> RowMajorMatrix<F> {
     let n_rows = 32;
 
@@ -182,24 +190,37 @@ pub fn generate_trace<F: PrimeField, const WIDTH: usize>(
                     state[j] += sums[j % 4];
                 }
             } else if cols.is_internal == F::one() {
-                let part_sum: u64 = state
-                    .iter()
-                    .skip(1)
-                    .map(|x| {
-                        let x_u64 = biguint_to_u64(x.as_canonical_biguint());
-                        x_u64
-                    })
-                    .sum();
-                let full_sum = part_sum + (biguint_to_u64(state[0].as_canonical_biguint()));
-                let s0 = part_sum + biguint_to_u64((-state[0]).as_canonical_biguint());
-                state[0] =
-                    F::from_canonical_u32(biguint_to_u32(from_u62(s0).as_canonical_biguint()));
-                for i in 1..16 {
-                    let si = full_sum
-                        + ((biguint_to_u64(state[i].as_canonical_biguint()))
-                            << POSEIDON2_INTERNAL_MATRIX_DIAG_16_SHIFTS[i - 1]); // TODO: this constant here should be different for GL64
-                    state[i] =
-                        F::from_canonical_u32(biguint_to_u32(from_u62(si).as_canonical_biguint()));
+                match field_type {
+                    FieldType::M31 => {
+                        let part_sum: u64 = state
+                            .iter()
+                            .skip(1)
+                            .map(|x| {
+                                let x_u64 = biguint_to_u64(x.as_canonical_biguint());
+                                x_u64
+                            })
+                            .sum();
+                        let full_sum = part_sum + (biguint_to_u64(state[0].as_canonical_biguint()));
+                        let s0 = part_sum + biguint_to_u64((-state[0]).as_canonical_biguint());
+                        state[0] = F::from_canonical_u32(biguint_to_u32(
+                            from_u62(s0).as_canonical_biguint(),
+                        ));
+                        for i in 1..16 {
+                            let si = full_sum
+                                + ((biguint_to_u64(state[i].as_canonical_biguint()))
+                                    << POSEIDON2_INTERNAL_MATRIX_DIAG_16_SHIFTS[i - 1]); // TODO: this constant here should be different for GL64
+                            state[i] = F::from_canonical_u32(biguint_to_u32(
+                                from_u62(si).as_canonical_biguint(),
+                            ));
+                        }
+                    }
+                    FieldType::GL64 => {
+                        let sum: F = state.iter().cloned().sum();
+                        for i in 0..WIDTH {
+                            state[i] *= F::from_canonical_u64(Goldilocks::from_f(MATRIX_DIAG_16_GOLDILOCKS[i]).as_canonical_u64());
+                            state[i] += sum.clone();
+                        }
+                    }
                 }
             }
 

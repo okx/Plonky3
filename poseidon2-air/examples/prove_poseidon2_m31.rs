@@ -12,7 +12,7 @@ use p3_keccak::Keccak256Hash;
 use p3_merkle_tree::FieldMerkleTreeMmcs;
 use p3_mersenne_31::{DiffusionMatrixMersenne31, Mersenne31};
 use p3_poseidon2::{Poseidon2, Poseidon2ExternalMatrixGeneral, M31_RC_16_30_U32};
-use p3_poseidon2_air::{generate_trace, Poseidon2Air};
+use p3_poseidon2_air::{generate_trace, FieldType, Poseidon2Air};
 use p3_symmetric::{
     CompressionFunctionFromHasher, PaddingFreeSponge, SerializingHasher32, TruncatedPermutation,
 };
@@ -75,7 +75,7 @@ fn main() {
         .iter()
         .map(|x| core::array::from_fn(|i| Val::from_wrapped_u32(x[i])))
         .collect();
-    let trace = generate_trace::<Val, WIDTH>(&mut input, rc);
+    let trace = generate_trace::<Val, WIDTH>(&mut input, rc, FieldType::M31);
 
     let fri_config = FriConfig {
         log_blowup: 1,

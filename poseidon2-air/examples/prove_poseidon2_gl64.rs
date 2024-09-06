@@ -13,7 +13,7 @@ use p3_goldilocks::{DiffusionMatrixGoldilocks, Goldilocks};
 use p3_keccak::Keccak256Hash;
 use p3_merkle_tree::FieldMerkleTreeMmcs;
 use p3_poseidon2::{Poseidon2, Poseidon2ExternalMatrixGeneral};
-use p3_poseidon2_air::{generate_trace, Poseidon2Air};
+use p3_poseidon2_air::{generate_trace, FieldType, Poseidon2Air};
 use p3_symmetric::{
     CompressionFunctionFromHasher, PaddingFreeSponge, SerializingHasher32, TruncatedPermutation,
 };
@@ -122,7 +122,7 @@ fn main() {
     //     let internal_linear_layer = DiffusionMatrixGoldilocks::default();
     let air: Poseidon2Air<Val, WIDTH> = Poseidon2Air::new();
     let mut input = core::array::from_fn(|j| Goldilocks::from_canonical_u64(0));
-    let trace = generate_trace::<Val, WIDTH>(&mut input, round_constants.clone());
+    let trace = generate_trace::<Val, WIDTH>(&mut input, round_constants.clone(), FieldType::GL64);
 
     let fri_config = FriConfig {
         log_blowup: 1,
