@@ -67,7 +67,7 @@ fn main() {
 
     let external_linear_layer = Poseidon2ExternalMatrixGeneral::default();
     let internal_linear_layer = DiffusionMatrixMersenne31::default();
-    let air: Poseidon2Air<Val, WIDTH> = Poseidon2Air::new();
+    let air: Poseidon2Air<Val, WIDTH> = Poseidon2Air::new(FieldType::M31);
     // let mut inputs = (0..NUM_HASHES).map(|i| core::array::from_fn(|j| Mersenne31::from_canonical_u32(0))).collect::<Vec<_>>();
     let mut input = core::array::from_fn(|j| Mersenne31::from_canonical_u32(0));
 

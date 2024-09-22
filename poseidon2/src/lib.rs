@@ -141,7 +141,6 @@ where
         Standard: Distribution<F> + Distribution<[F; WIDTH]>,
     {
         let (rounds_f, rounds_p) = poseidon2_round_numbers_128::<F>(WIDTH, D);
-        println!("rounds_f: {:?}, rounds_p: {:?}", rounds_f, rounds_p);
 
         let external_constants = rng
             .sample_iter(Standard)
@@ -171,10 +170,10 @@ where
     fn permute_mut(&self, state: &mut [AF; WIDTH]) {
         // The initial linear layer.
         self.external_linear_layer.permute_mut(state);
-
         // The first half of the external rounds.
         let rounds_f_half = self.rounds_f / 2;
         for r in 0..rounds_f_half {
+
             self.add_rc(state, &self.external_constants[r]);
             self.sbox(state);
             self.external_linear_layer.permute_mut(state);

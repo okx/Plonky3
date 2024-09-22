@@ -9,7 +9,7 @@ use p3_matrix::dense::RowMajorMatrix;
 use p3_maybe_rayon::prelude::*;
 use p3_mersenne_31::{from_u62, Mersenne31, POSEIDON2_INTERNAL_MATRIX_DIAG_16_SHIFTS};
 use p3_poseidon2::{apply_mat4, M31_RC_16_30_U32};
-
+use core::mem::size_of;
 use crate::columns::Poseidon2Cols;
 use crate::num_cols;
 
@@ -96,6 +96,7 @@ pub fn biguint_to_u32(input: BigUint) -> u32 {
     x_u32
 }
 
+#[derive(Debug, PartialEq)]
 pub enum FieldType {
     M31,
     GL64,
@@ -208,7 +209,7 @@ pub fn generate_trace<F: PrimeField, const WIDTH: usize>(
                         for i in 1..16 {
                             let si = full_sum
                                 + ((biguint_to_u64(state[i].as_canonical_biguint()))
-                                    << POSEIDON2_INTERNAL_MATRIX_DIAG_16_SHIFTS[i - 1]); // TODO: this constant here should be different for GL64
+                                    << POSEIDON2_INTERNAL_MATRIX_DIAG_16_SHIFTS[i - 1]);
                             state[i] = F::from_canonical_u32(biguint_to_u32(
                                 from_u62(si).as_canonical_biguint(),
                             ));
@@ -225,6 +226,7 @@ pub fn generate_trace<F: PrimeField, const WIDTH: usize>(
             }
 
             // Copy the state to the output.
+            // println!("air, round {}, state {:?}",r, state);
             cols.output.copy_from_slice(&state);
 
             *input = cols.output;

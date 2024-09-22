@@ -1,46 +1,74 @@
 ///! the code is referenced from here: https://github.com/succinctlabs/sp1/pull/397
 /// however, their implementation does not fit to plonky3; lots of parts have been tuned to make it fix plonky3
 use alloc::vec::Vec;
+use p3_goldilocks::{Goldilocks, MATRIX_DIAG_16_GOLDILOCKS, MATRIX_DIAG_16_GOLDILOCKS_U64};
 use core::borrow::Borrow;
 
+use crate::columns::Poseidon2Cols;
+use crate::{
+    biguint_to_u64, goldilocks_from_ark_ff, num_cols, FieldType, FullRound, PartialRound, SBox,
+};
 use p3_air::{Air, AirBuilder, BaseAir};
-use p3_field::{AbstractField, Field};
+use p3_field::{AbstractField, Field, PrimeField64};
 use p3_matrix::Matrix;
 use p3_mersenne_31::{POSEIDON2_INTERNAL_MATRIX_DIAG_16, POSEIDON2_INTERNAL_MATRIX_DIAG_16_SHIFTS};
 use p3_poseidon2::{apply_mat4, M31_RC_16_30_U32};
-
-use crate::columns::Poseidon2Cols;
-use crate::{biguint_to_u64, num_cols, FullRound, PartialRound, SBox};
+use zkhash::poseidon::poseidon_instance_goldilocks::RC16;
 
 /// Assumes the field size is at least 16 bits.
 ///
 /// ***WARNING***: this is a stub for now, not ready to use.
 #[derive(Debug)]
 pub struct Poseidon2Air<F: Field, const WIDTH: usize> {
-    beginning_full_round_constants: [[F; 16]; 4],
-    partial_round_constants: [F; 22],
-    ending_full_round_constants: [[F; 16]; 4],
+    round_constants: Vec<[F; WIDTH]>,
+    field_type: FieldType,
 }
 
 impl<F: Field, const WIDTH: usize> Poseidon2Air<F, WIDTH> {
-    pub fn new() -> Self {
-        let RC_16_30_U32_M31 = M31_RC_16_30_U32
-            .iter()
-            .map(|round| round.map(F::from_wrapped_u32))
-            .collect::<Vec<_>>();
-        // .try_into()
-        // .unwrap();
-        let beginning_full_round_constants: [[F; 16]; 4] =
-            core::array::from_fn(|i| RC_16_30_U32_M31.get(i).unwrap().clone());
-        let ending_full_round_constants: [[F; 16]; 4] =
-            core::array::from_fn(|i| RC_16_30_U32_M31.get(i + 26).unwrap().clone());
-        let partial_round_constants: [F; 22] =
-            core::array::from_fn(|i| RC_16_30_U32_M31.get(i + 4).unwrap().clone()[0]);
+    pub fn new(field_type: FieldType) -> Self {
+        let round_constants = match field_type {
+            FieldType::GL64 => {
+                let round_constants: Vec<[F; WIDTH]> = RC16
+                    .iter()
+                    .map(|vec| {
+                        let constant: [F; WIDTH] = core::array::from_fn(|i| {
+                            let a = goldilocks_from_ark_ff(vec[i]);
+                            F::from_canonical_u64(a.as_canonical_u64())
+                        });
+                        constant
+                    })
+                    .collect();
+                round_constants
+            }
+            FieldType::M31 => {
+                let constants = M31_RC_16_30_U32
+                    .iter()
+                    .map(|round| {
+                        let constant: [F; WIDTH] =
+                            core::array::from_fn(|i| F::from_wrapped_u32(round[i]));
+                        constant
+                    })
+                    .collect::<Vec<_>>();
+                constants
+            }
+        };
+
+        // let RC_16_30_U32_M31 = M31_RC_16_30_U32
+        //     .iter()
+        //     .map(|round| round.map(F::from_wrapped_u32))
+        //     .collect::<Vec<_>>();
+        // // .try_into()
+        // // .unwrap();
+        // let beginning_full_round_constants: [[F; 16]; 4] =
+        //     core::array::from_fn(|i| RC_16_30_U32_M31.get(i).unwrap().clone());
+        // let ending_full_round_constants: [[F; 16]; 4] =
+        //     core::array::from_fn(|i| RC_16_30_U32_M31.get(i + 26).unwrap().clone());
+        // let partial_round_constants: [F; 22] =
+        //     core::array::from_fn(|i| RC_16_30_U32_M31.get(i + 4).unwrap().clone()[0]);
 
         Self {
-            beginning_full_round_constants: beginning_full_round_constants,
-            partial_round_constants: partial_round_constants,
-            ending_full_round_constants: ending_full_round_constants,
+            round_constants,
+            field_type,
         }
     }
 }
@@ -65,10 +93,10 @@ impl<AB: AirBuilder, const WIDTH: usize> Air<AB> for Poseidon2Air<AB::F, WIDTH> 
 
         // Convert the u32 round constants to field elements.
         // [[AB::F; WIDTH]; 30]
-        let constants = M31_RC_16_30_U32
-            .iter()
-            .map(|round| round.map(AB::F::from_wrapped_u32))
-            .collect::<Vec<_>>();
+        let constants = &self.round_constants;
+        // .iter()
+        // .map(|round| round.map(AB::F::from_wrapped_u32))
+        // .collect::<Vec<_>>();
 
         // Apply the round constants.
         //
@@ -159,41 +187,39 @@ impl<AB: AirBuilder, const WIDTH: usize> Air<AB> for Poseidon2Air<AB::F, WIDTH> 
 
         // INTERNAL LAYER
         {
-            // Use a simple matrix multiplication as the permutation.
-            // let mut state: [AB::Expr; WIDTH] = sbox_result.clone();
-            // let matmul_constants: [<<AB as AirBuilder>::Expr as AbstractField>::F; WIDTH] =
-            //     MATRIX_DIAG_16_M31_U32
-            //         .iter()
-            //         .map(|x| <<AB as AirBuilder>::Expr as AbstractField>::F::from_wrapped_u32(*x))
-            //         .collect::<Vec<_>>()
-            //         .try_into()
-            //         .unwrap();
-            // matmul_internal(&mut state, matmul_constants);
-            let mut state: [AB::Expr; WIDTH] = sbox_result.clone();
-            let part_sum: AB::Expr = state.clone()
-                .iter()
-                .skip(1)
-                .map(|x| {
-                    x.clone()
-                })
-                .sum();
-            let full_sum = part_sum.clone() + state[0].clone();
-            let s0 = part_sum.clone() + (-state[0].clone());
-            // state[0] = F::from_canonical_u32(biguint_to_u32(from_u62(s0).as_canonical_biguint()));
-            state[0] = s0;
-            for i in 1..16 {
-                let si = full_sum.clone()
-                    + (state[i].clone()
-                        * (AB::F::from_canonical_u32(
-                            1 << POSEIDON2_INTERNAL_MATRIX_DIAG_16_SHIFTS[i-1],
-                        )));
-                state[i] = si;
-            }
-
-            for i in 0..WIDTH {
-                builder
-                    .when(local.is_internal)
-                    .assert_eq(state[i].clone(), local.output[i]);
+            if self.field_type == FieldType::M31 {
+                let mut state: [AB::Expr; WIDTH] = sbox_result.clone();
+                let part_sum: AB::Expr = state.clone().iter().skip(1).map(|x| x.clone()).sum();
+                let full_sum = part_sum.clone() + state[0].clone();
+                let s0 = part_sum.clone() + (-state[0].clone());
+                // state[0] = F::from_canonical_u32(biguint_to_u32(from_u62(s0).as_canonical_biguint()));
+                state[0] = s0;
+                for i in 1..16 {
+                    let si = full_sum.clone()
+                        + (state[i].clone()
+                            * (AB::F::from_canonical_u32(
+                                1 << POSEIDON2_INTERNAL_MATRIX_DIAG_16_SHIFTS[i - 1],
+                            )));
+                    state[i] = si;
+                }
+                for i in 0..WIDTH {
+                    builder
+                        .when(local.is_internal)
+                        .assert_eq(state[i].clone(), local.output[i]);
+                }
+            } else if self.field_type == FieldType::GL64 {
+                let mut state: [AB::Expr; WIDTH] = sbox_result.clone();
+                let sum: AB::Expr = state.iter().cloned().sum();
+                for i in 0..WIDTH {
+                    let a = Goldilocks::from_f(MATRIX_DIAG_16_GOLDILOCKS[i]).as_canonical_u64();
+                    state[i] *= AB::F::from_canonical_u64(a).into();
+                    state[i] += sum.clone();
+                }
+                for i in 0..WIDTH {
+                    builder
+                        .when(local.is_internal)
+                        .assert_eq(state[i].clone(), local.output[i]);
+                }
             }
         }
 
@@ -226,7 +252,6 @@ impl<AB: AirBuilder, const WIDTH: usize> Air<AB> for Poseidon2Air<AB::F, WIDTH> 
         builder.assert_eq(local.is_internal, is_internal);
     }
 }
-
 
 #[inline]
 fn eval_full_round<

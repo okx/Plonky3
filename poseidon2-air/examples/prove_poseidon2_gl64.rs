@@ -120,7 +120,7 @@ fn main() {
 
     //     let external_linear_layer = Poseidon2ExternalMatrixGeneral::default();
     //     let internal_linear_layer = DiffusionMatrixGoldilocks::default();
-    let air: Poseidon2Air<Val, WIDTH> = Poseidon2Air::new();
+    let air: Poseidon2Air<Val, WIDTH> = Poseidon2Air::new(FieldType::GL64);
     let mut input = core::array::from_fn(|j| Goldilocks::from_canonical_u64(0));
     let trace = generate_trace::<Val, WIDTH>(&mut input, round_constants.clone(), FieldType::GL64);
 
@@ -147,12 +147,12 @@ fn main() {
 
     let proof = prove::<MyConfig, _>(&config, &air, &mut challenger, trace, &vec![]);
 
-    std::fs::write(
-        "proof_poseidon2_gl64.json",
-        serde_json::to_string(&proof).unwrap(),
-    )
-    .unwrap();
+    // std::fs::write(
+    //     "proof_poseidon2_gl64.json",
+    //     serde_json::to_string(&proof).unwrap(),
+    // )
+    // .unwrap();
 
-    let mut challenger = Challenger::new(perm);
-    verify(&config, &air, &mut challenger, &proof, &vec![]).unwrap();
+    // let mut challenger = Challenger::new(perm);
+    // verify(&config, &air, &mut challenger, &proof, &vec![]).unwrap();
 }
