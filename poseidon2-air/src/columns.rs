@@ -11,24 +11,17 @@ use core::mem::size_of;
 #[repr(C)]
 pub struct Poseidon2Cols<
     T,
-    const WIDTH: usize,
-    const SBOX_DEGREE: usize,
-    const SBOX_REGISTERS: usize,
-    const HALF_FULL_ROUNDS: usize,
-    const PARTIAL_ROUNDS: usize,
+    const WIDTH: usize
 > {
-    pub export: T,
-
-    pub inputs: [T; WIDTH],
-
-    /// Beginning Full Rounds
-    pub beginning_full_rounds: [FullRound<T, WIDTH, SBOX_DEGREE, SBOX_REGISTERS>; HALF_FULL_ROUNDS],
-
-    /// Partial Rounds
-    pub partial_rounds: [PartialRound<T, WIDTH, SBOX_DEGREE, SBOX_REGISTERS>; PARTIAL_ROUNDS],
-
-    /// Ending Full Rounds
-    pub ending_full_rounds: [FullRound<T, WIDTH, SBOX_DEGREE, SBOX_REGISTERS>; HALF_FULL_ROUNDS],
+    pub input: [T; WIDTH],
+    pub rounds: [T; 31],
+    pub add_rc: [T; WIDTH],
+    pub sbox_deg_3: [T; WIDTH],
+    // pub sbox_deg_7: [T; WIDTH],
+    pub output: [T; WIDTH],
+    pub is_initial: T,
+    pub is_internal: T,
+    pub is_external: T,
 }
 
 /// Full Round Columns
@@ -61,65 +54,57 @@ pub struct SBox<T, const DEGREE: usize, const REGISTERS: usize>(pub [T; REGISTER
 
 pub const fn num_cols<
     const WIDTH: usize,
-    const SBOX_DEGREE: usize,
-    const SBOX_REGISTERS: usize,
-    const HALF_FULL_ROUNDS: usize,
-    const PARTIAL_ROUNDS: usize,
+    // const SBOX_DEGREE: usize,
+    // const SBOX_REGISTERS: usize,
+    // const HALF_FULL_ROUNDS: usize,
+    // const PARTIAL_ROUNDS: usize,
 >() -> usize {
-    size_of::<Poseidon2Cols<u8, WIDTH, SBOX_DEGREE, SBOX_REGISTERS, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>>(
+    size_of::<Poseidon2Cols<u8, WIDTH>>(
     )
 }
 
-pub const fn make_col_map<
-    const WIDTH: usize,
-    const SBOX_DEGREE: usize,
-    const SBOX_REGISTERS: usize,
-    const HALF_FULL_ROUNDS: usize,
-    const PARTIAL_ROUNDS: usize,
->() -> Poseidon2Cols<usize, WIDTH, SBOX_DEGREE, SBOX_REGISTERS, HALF_FULL_ROUNDS, PARTIAL_ROUNDS> {
-    todo!()
-    // let indices_arr = indices_arr::<
-    //     { num_cols::<WIDTH, SBOX_DEGREE, SBOX_REGISTERS, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>() },
-    // >();
-    // unsafe {
-    //     transmute::<
-    //         [usize;
-    //             num_cols::<WIDTH, SBOX_DEGREE, SBOX_REGISTERS, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>()],
-    //         Poseidon2Cols<
-    //             usize,
-    //             WIDTH,
-    //             SBOX_DEGREE,
-    //             SBOX_REGISTERS,
-    //             HALF_FULL_ROUNDS,
-    //             PARTIAL_ROUNDS,
-    //         >,
-    //     >(indices_arr)
-    // }
-}
+// pub const fn make_col_map<
+//     const WIDTH: usize,
+//     const SBOX_DEGREE: usize,
+//     const SBOX_REGISTERS: usize,
+//     const HALF_FULL_ROUNDS: usize,
+//     const PARTIAL_ROUNDS: usize,
+// >() -> Poseidon2Cols<usize, WIDTH, SBOX_DEGREE, SBOX_REGISTERS, HALF_FULL_ROUNDS, PARTIAL_ROUNDS> {
+//     todo!()
+//     // let indices_arr = indices_arr::<
+//     //     { num_cols::<WIDTH, SBOX_DEGREE, SBOX_REGISTERS, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>() },
+//     // >();
+//     // unsafe {
+//     //     transmute::<
+//     //         [usize;
+//     //             num_cols::<WIDTH, SBOX_DEGREE, SBOX_REGISTERS, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>()],
+//     //         Poseidon2Cols<
+//     //             usize,
+//     //             WIDTH,
+//     //             SBOX_DEGREE,
+//     //             SBOX_REGISTERS,
+//     //             HALF_FULL_ROUNDS,
+//     //             PARTIAL_ROUNDS,
+//     //         >,
+//     //     >(indices_arr)
+//     // }
+// }
 
 impl<
         T,
         const WIDTH: usize,
-        const SBOX_DEGREE: usize,
-        const SBOX_REGISTERS: usize,
-        const HALF_FULL_ROUNDS: usize,
-        const PARTIAL_ROUNDS: usize,
-    > Borrow<Poseidon2Cols<T, WIDTH, SBOX_DEGREE, SBOX_REGISTERS, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>>
+    > Borrow<Poseidon2Cols<T, WIDTH>>
     for [T]
 {
     fn borrow(
         &self,
-    ) -> &Poseidon2Cols<T, WIDTH, SBOX_DEGREE, SBOX_REGISTERS, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>
+    ) -> &Poseidon2Cols<T, WIDTH>
     {
         // debug_assert_eq!(self.len(), NUM_COLS);
         let (prefix, shorts, suffix) = unsafe {
             self.align_to::<Poseidon2Cols<
                 T,
-                WIDTH,
-                SBOX_DEGREE,
-                SBOX_REGISTERS,
-                HALF_FULL_ROUNDS,
-                PARTIAL_ROUNDS,
+                WIDTH
             >>()
         };
         debug_assert!(prefix.is_empty(), "Alignment should match");
@@ -132,28 +117,28 @@ impl<
 impl<
         T,
         const WIDTH: usize,
-        const SBOX_DEGREE: usize,
-        const SBOX_REGISTERS: usize,
-        const HALF_FULL_ROUNDS: usize,
-        const PARTIAL_ROUNDS: usize,
+        // const SBOX_DEGREE: usize,
+        // const SBOX_REGISTERS: usize,
+        // const HALF_FULL_ROUNDS: usize,
+        // const PARTIAL_ROUNDS: usize,
     >
     BorrowMut<
-        Poseidon2Cols<T, WIDTH, SBOX_DEGREE, SBOX_REGISTERS, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>,
+        Poseidon2Cols<T, WIDTH>,
     > for [T]
 {
     fn borrow_mut(
         &mut self,
-    ) -> &mut Poseidon2Cols<T, WIDTH, SBOX_DEGREE, SBOX_REGISTERS, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>
+    ) -> &mut Poseidon2Cols<T, WIDTH>
     {
         // debug_assert_eq!(self.len(), NUM_COLS);
         let (prefix, shorts, suffix) = unsafe {
             self.align_to_mut::<Poseidon2Cols<
                 T,
                 WIDTH,
-                SBOX_DEGREE,
-                SBOX_REGISTERS,
-                HALF_FULL_ROUNDS,
-                PARTIAL_ROUNDS,
+                // SBOX_DEGREE,
+                // SBOX_REGISTERS,
+                // HALF_FULL_ROUNDS,
+                // PARTIAL_ROUNDS,
             >>()
         };
         debug_assert!(prefix.is_empty(), "Alignment should match");
